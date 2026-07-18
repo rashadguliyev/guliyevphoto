@@ -156,15 +156,15 @@ export default function App() {
             <img 
               src={get('hero.background')}
               alt="Atmospheric photography background"
-              className="w-full h-full object-cover opacity-25 filter grayscale brightness-[45%] contrast-[110%]"
+              className="w-full h-full object-cover filter grayscale brightness-[65%] contrast-[110%]"
               referrerPolicy="no-referrer"
             />
-            {/* Radial/elliptical gradient to fade the bottom into an ovalish shape */}
+            {/* Adjustable dark gradient. At 0% the photograph is fully visible;
+                at 100% the hero is fully dark. */}
             <div 
               className="absolute inset-0" 
               style={{
-                background: 'radial-gradient(ellipse 90% 75% at 50% 25%, transparent 10%, #090B0B 95%)',
-                opacity: Math.max(0, Math.min(100, Number(get('hero.overlayOpacity', '50')) || 0)) / 100,
+                background: `linear-gradient(to bottom, rgba(9,11,11,${Math.max(0, Math.min(100, Number(get('hero.overlayOpacity', '50')) || 0)) / 100}) 0%, rgba(9,11,11,${Math.max(0, Math.min(100, Number(get('hero.overlayOpacity', '50')) || 0)) / 100}) 62%, #090B0B 100%)`,
               }}
             />
           </div>

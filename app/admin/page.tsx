@@ -408,16 +408,25 @@ export default function AdminPage() {
     if (!confirmed) return;
     setLoading(true);
     setError("");
+    const { data: deletedMessage, error: deleteError } = await supabase
+      .from("contact_messages")
+      .delete()
+      .eq("id", message.id)
+      .select("id")
+      .maybeSingle();
+    if (deleteError) {
+      setLoading(false);
+      return setError(deleteError.message);
+    }
+    if (!deletedMessage) {
+      setLoading(false);
+      return setError("Supabase did not delete this inquiry. Run supabase/fix-inquiry-delete.sql once in the Supabase SQL Editor, then try again.");
+    }
     if (message.attachment_path) {
       const { error: attachmentError } = await supabase.storage.from("contact-attachments").remove([message.attachment_path]);
-      if (attachmentError) {
-        setLoading(false);
-        return setError(`The inquiry was not deleted because its attachment could not be removed: ${attachmentError.message}`);
-      }
+      if (attachmentError) setError(`The inquiry was deleted, but its attachment could not be removed: ${attachmentError.message}`);
     }
-    const { error: deleteError } = await supabase.from("contact_messages").delete().eq("id", message.id);
     setLoading(false);
-    if (deleteError) return setError(deleteError.message);
     setMessages((rows) => rows.filter((row) => row.id !== message.id));
     showNotice("Inquiry deleted");
   };
