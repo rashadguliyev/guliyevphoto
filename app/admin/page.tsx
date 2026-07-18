@@ -5,6 +5,8 @@ import {
   Check,
   BookOpen,
   ChevronRight,
+  Copy,
+  DollarSign,
   Image as ImageIcon,
   Inbox,
   GripVertical,
@@ -22,9 +24,9 @@ import { CMS_FIELDS, defaultCmsValues } from "@/site/cmsFields";
 import { portfolioItems as defaultPortfolio } from "@/site/data";
 import { supabase, uploadSiteImage } from "@/site/supabase";
 import type { BlogArticle } from "@/site/blogData";
-import { defaultBlogArticles, defaultContactFields, defaultFaqs, defaultTestimonials, parseJsonSetting, type ContactField, type FaqItem, type Testimonial } from "@/site/contentModels";
+import { defaultBlogArticles, defaultContactFields, defaultFaqs, defaultPricingContent, defaultTestimonials, parseJsonSetting, type ContactField, type FaqItem, type PricingContent, type PricingPackage, type Testimonial } from "@/site/contentModels";
 
-type Tab = "content" | "portfolio" | "blog" | "testimonials" | "faq" | "contact" | "messages";
+type Tab = "content" | "portfolio" | "pricing" | "blog" | "testimonials" | "faq" | "contact" | "messages";
 type PortfolioRow = {
   id: string;
   title: string;
@@ -85,6 +87,34 @@ const blankTestimonial = (): Testimonial => ({
   text: "",
   imageUrl: "",
 });
+
+const blankPricingPackage = (): PricingPackage => ({
+  id: crypto.randomUUID(),
+  name: "New package",
+  price: "$0",
+  currency: "USD",
+  description: "",
+  features: ["Included feature"],
+  badge: "",
+  buttonLabel: "Book this package",
+  highlighted: false,
+  visible: true,
+});
+
+const mergePricingContent = (saved?: string): PricingContent => {
+  const parsed = parseJsonSetting<Partial<PricingContent>>(saved, {});
+  return {
+    ...defaultPricingContent,
+    ...parsed,
+    packages: Array.isArray(parsed.packages) ? parsed.packages : defaultPricingContent.packages,
+    commercial: { ...defaultPricingContent.commercial, ...(parsed.commercial || {}) },
+    faq: {
+      ...defaultPricingContent.faq,
+      ...(parsed.faq || {}),
+      items: Array.isArray(parsed.faq?.items) ? parsed.faq.items : defaultPricingContent.faq.items,
+    },
+  };
+};
 
 function Login({ onSession }: { onSession: (session: Session) => void }) {
   const [email, setEmail] = useState("");
@@ -154,8 +184,10 @@ export default function AdminPage() {
   const [articles, setArticles] = useState<BlogArticle[]>(defaultBlogArticles);
   const [testimonials, setTestimonials] = useState<Testimonial[]>(defaultTestimonials);
   const [faqs, setFaqs] = useState<FaqItem[]>(defaultFaqs);
+  const [pricing, setPricing] = useState<PricingContent>(defaultPricingContent);
   const [contactFields, setContactFields] = useState<ContactField[]>(defaultContactFields);
   const [draggedPortfolioIndex, setDraggedPortfolioIndex] = useState<number | null>(null);
+  const [draggedPricingIndex, setDraggedPricingIndex] = useState<number | null>(null);
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
@@ -187,6 +219,7 @@ export default function AdminPage() {
       setArticles(parseJsonSetting(overrides['blog.articles'], defaultBlogArticles));
       setTestimonials(parseJsonSetting(overrides['home.testimonials.data'], defaultTestimonials));
       setFaqs(parseJsonSetting(overrides['home.faq.data'], defaultFaqs));
+      setPricing(mergePricingContent(overrides['pricing.data']));
       setContactFields(parseJsonSetting(overrides['contact.fields'], defaultContactFields));
     }
     if (portfolioResult.data) setPortfolio(portfolioResult.data.map((row) => ({
@@ -323,6 +356,25 @@ export default function AdminPage() {
     showNotice("Order changed. Click Save portfolio to publish it.");
   };
 
+  const movePricingPackage = (targetIndex: number) => {
+    if (draggedPricingIndex === null || draggedPricingIndex === targetIndex) return;
+    setPricing((current) => {
+      const packages = [...current.packages];
+      const [moved] = packages.splice(draggedPricingIndex, 1);
+      packages.splice(targetIndex, 0, moved);
+      return { ...current, packages };
+    });
+    setDraggedPricingIndex(null);
+    showNotice("Package order changed. Save pricing to publish it.");
+  };
+
+  const updatePricingPackage = (index: number, changes: Partial<PricingPackage>) => {
+    setPricing((current) => ({
+      ...current,
+      packages: current.packages.map((pkg, packageIndex) => packageIndex === index ? { ...pkg, ...changes } : pkg),
+    }));
+  };
+
   const uploadPortfolioImage = async (index: number, file?: File) => {
     if (!file) return;
     setLoading(true);
@@ -399,6 +451,7 @@ export default function AdminPage() {
             {([
               ["content", "Content & images", ImageIcon],
               ["portfolio", "Portfolio", LayoutDashboard],
+              ["pricing", "Pricing", DollarSign],
               ["blog", "Blog articles", BookOpen],
               ["testimonials", "Testimonials", Quote],
               ["faq", "FAQ", Plus],
@@ -412,7 +465,7 @@ export default function AdminPage() {
 
         <main className="min-w-0 p-5 md:p-8">
           <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-            <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#A27B5D]">Dashboard</p><h1 className="mt-1 font-display text-4xl font-semibold">{{ content: "Section content & images", portfolio: "Portfolio manager", blog: "Blog manager", testimonials: "Client testimonials", faq: "Frequently asked questions", contact: "Contact form fields", messages: "Contact inquiries" }[tab]}</h1></div>
+            <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#A27B5D]">Dashboard</p><h1 className="mt-1 font-display text-4xl font-semibold">{{ content: "Section content & images", portfolio: "Portfolio manager", pricing: "Pricing manager", blog: "Blog manager", testimonials: "Client testimonials", faq: "Frequently asked questions", contact: "Contact form fields", messages: "Contact inquiries" }[tab]}</h1></div>
             <button onClick={() => void loadData()} disabled={loading} className="flex items-center gap-2 rounded border border-white/10 px-4 py-2 text-xs text-white/60 hover:border-[#A27B5D] hover:text-[#A27B5D]"><RefreshCw size={14} className={loading ? "animate-spin" : ""} />Refresh</button>
           </div>
 
@@ -476,6 +529,79 @@ export default function AdminPage() {
                   <button onClick={() => void deletePortfolioItem(index)} className="self-start rounded border border-red-400/15 p-2 text-red-300/60 hover:bg-red-500/10 hover:text-red-200" title="Delete"><Trash2 size={15} /></button>
                 </article>
               ))}
+            </div>
+          )}
+
+          {tab === "pricing" && (
+            <div className="space-y-6">
+              <div className="flex flex-wrap items-center gap-3 rounded-lg border border-[#A27B5D]/25 bg-[#A27B5D]/5 p-4">
+                <button onClick={() => setPricing((current) => ({ ...current, packages: [...current.packages, blankPricingPackage()] }))} className="flex items-center gap-2 rounded bg-[#A27B5D] px-4 py-2 text-xs font-bold text-[#090B0B]"><Plus size={14} />Add package</button>
+                <button onClick={() => void saveStructuredContent('pricing.data', pricing, 'Pricing', 'Pricing')} disabled={loading} className="flex items-center gap-2 rounded border border-[#A27B5D]/50 px-4 py-2 text-xs font-semibold text-[#A27B5D] disabled:opacity-40"><Save size={14} />Save all pricing</button>
+                <p className="text-[10px] text-white/45">Edit every part of the pricing page. Changes go live after you save.</p>
+              </div>
+
+              <section className="rounded-lg border border-white/10 bg-[#283133]/20 p-5 md:p-6">
+                <div className="mb-5"><p className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#A27B5D]">Page header</p><h2 className="mt-1 font-display text-2xl font-semibold">Pricing introduction</h2></div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <label><span className="mb-1.5 block text-[9px] font-bold uppercase text-white/40">Eyebrow</span><input value={pricing.eyebrow} onChange={(event) => setPricing((current) => ({ ...current, eyebrow: event.target.value }))} className="w-full rounded border border-white/10 bg-black/25 p-3 text-xs outline-none focus:border-[#A27B5D]" /></label>
+                  <label><span className="mb-1.5 block text-[9px] font-bold uppercase text-white/40">Main heading</span><input value={pricing.heading} onChange={(event) => setPricing((current) => ({ ...current, heading: event.target.value }))} className="w-full rounded border border-white/10 bg-black/25 p-3 text-xs outline-none focus:border-[#A27B5D]" /></label>
+                  <label className="md:col-span-2"><span className="mb-1.5 block text-[9px] font-bold uppercase text-white/40">Introduction</span><textarea rows={4} value={pricing.intro} onChange={(event) => setPricing((current) => ({ ...current, intro: event.target.value }))} className="w-full rounded border border-white/10 bg-black/25 p-3 text-xs leading-6 outline-none focus:border-[#A27B5D]" /></label>
+                </div>
+              </section>
+
+              <div className="space-y-4">
+                <div><p className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#A27B5D]">Packages</p><h2 className="mt-1 font-display text-2xl font-semibold">Package cards</h2><p className="mt-1 text-[10px] text-white/40">Drag the handle to change display order. Hidden packages remain saved but do not appear on the website.</p></div>
+                {pricing.packages.map((pkg, index) => (
+                  <article key={pkg.id} onDragOver={(event) => event.preventDefault()} onDrop={() => movePricingPackage(index)} className={`relative rounded-lg border bg-[#283133]/20 p-5 md:p-6 ${draggedPricingIndex === index ? 'border-[#A27B5D]' : 'border-white/10'}`}>
+                    <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+                      <div className="flex items-center gap-3">
+                        <button type="button" draggable onDragStart={() => setDraggedPricingIndex(index)} onDragEnd={() => setDraggedPricingIndex(null)} className="cursor-grab rounded p-2 text-white/30 hover:bg-white/5 hover:text-[#A27B5D] active:cursor-grabbing" title="Drag to reorder"><GripVertical size={18} /></button>
+                        <div><p className="text-[9px] uppercase tracking-wider text-white/35">Package {index + 1}</p><h3 className="font-display text-xl font-semibold">{pkg.name || 'Untitled package'}</h3></div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3 text-xs">
+                        <label className="flex items-center gap-2 text-white/60"><input type="checkbox" checked={pkg.visible !== false} onChange={(event) => updatePricingPackage(index, { visible: event.target.checked })} className="accent-[#A27B5D]" />Visible</label>
+                        <label className="flex items-center gap-2 text-white/60"><input type="checkbox" checked={pkg.highlighted} onChange={(event) => updatePricingPackage(index, { highlighted: event.target.checked })} className="accent-[#A27B5D]" />Highlight card</label>
+                        <button onClick={() => setPricing((current) => { const copy = { ...pkg, id: crypto.randomUUID(), name: `${pkg.name} copy` }; const packages = [...current.packages]; packages.splice(index + 1, 0, copy); return { ...current, packages }; })} className="rounded border border-white/10 p-2 text-white/45 hover:text-[#A27B5D]" title="Duplicate package"><Copy size={14} /></button>
+                        <button onClick={() => setPricing((current) => ({ ...current, packages: current.packages.filter((_, packageIndex) => packageIndex !== index) }))} className="rounded border border-red-400/15 p-2 text-red-300/60 hover:bg-red-500/10 hover:text-red-200" title="Delete package"><Trash2 size={14} /></button>
+                      </div>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                      <label className="md:col-span-2"><span className="mb-1.5 block text-[9px] font-bold uppercase text-white/40">Package name</span><input value={pkg.name} onChange={(event) => updatePricingPackage(index, { name: event.target.value })} className="w-full rounded border border-white/10 bg-black/25 p-3 text-xs outline-none focus:border-[#A27B5D]" /></label>
+                      <label><span className="mb-1.5 block text-[9px] font-bold uppercase text-white/40">Displayed price</span><input value={pkg.price} onChange={(event) => updatePricingPackage(index, { price: event.target.value })} placeholder="$350 or From $350" className="w-full rounded border border-white/10 bg-black/25 p-3 text-xs outline-none focus:border-[#A27B5D]" /></label>
+                      <label><span className="mb-1.5 block text-[9px] font-bold uppercase text-white/40">Currency / suffix</span><input value={pkg.currency} onChange={(event) => updatePricingPackage(index, { currency: event.target.value })} placeholder="USD" className="w-full rounded border border-white/10 bg-black/25 p-3 text-xs uppercase outline-none focus:border-[#A27B5D]" /></label>
+                      <label className="md:col-span-2 lg:col-span-4"><span className="mb-1.5 block text-[9px] font-bold uppercase text-white/40">Description</span><textarea rows={3} value={pkg.description} onChange={(event) => updatePricingPackage(index, { description: event.target.value })} className="w-full rounded border border-white/10 bg-black/25 p-3 text-xs leading-5 outline-none focus:border-[#A27B5D]" /></label>
+                      <label className="md:col-span-2"><span className="mb-1.5 block text-[9px] font-bold uppercase text-white/40">Included features — one per line</span><textarea rows={8} value={pkg.features.join('\n')} onChange={(event) => updatePricingPackage(index, { features: event.target.value.split('\n') })} className="w-full rounded border border-white/10 bg-black/25 p-3 text-xs leading-6 outline-none focus:border-[#A27B5D]" /></label>
+                      <div className="grid content-start gap-4 md:col-span-2">
+                        <label><span className="mb-1.5 block text-[9px] font-bold uppercase text-white/40">Badge text (optional)</span><input value={pkg.badge} onChange={(event) => updatePricingPackage(index, { badge: event.target.value })} placeholder="Most Popular" className="w-full rounded border border-white/10 bg-black/25 p-3 text-xs outline-none focus:border-[#A27B5D]" /></label>
+                        <label><span className="mb-1.5 block text-[9px] font-bold uppercase text-white/40">Booking button label</span><input value={pkg.buttonLabel} onChange={(event) => updatePricingPackage(index, { buttonLabel: event.target.value })} className="w-full rounded border border-white/10 bg-black/25 p-3 text-xs outline-none focus:border-[#A27B5D]" /></label>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+
+              <section className="rounded-lg border border-white/10 bg-[#283133]/20 p-5 md:p-6">
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><p className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#A27B5D]">Custom quotes</p><h2 className="mt-1 font-display text-2xl font-semibold">Commercial pricing section</h2></div><label className="flex items-center gap-2 text-xs text-white/60"><input type="checkbox" checked={pricing.commercial.visible !== false} onChange={(event) => setPricing((current) => ({ ...current, commercial: { ...current.commercial, visible: event.target.checked } }))} className="accent-[#A27B5D]" />Show section</label></div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <label><span className="mb-1.5 block text-[9px] font-bold uppercase text-white/40">Eyebrow</span><input value={pricing.commercial.eyebrow} onChange={(event) => setPricing((current) => ({ ...current, commercial: { ...current.commercial, eyebrow: event.target.value } }))} className="w-full rounded border border-white/10 bg-black/25 p-3 text-xs" /></label>
+                  <label><span className="mb-1.5 block text-[9px] font-bold uppercase text-white/40">Heading</span><input value={pricing.commercial.heading} onChange={(event) => setPricing((current) => ({ ...current, commercial: { ...current.commercial, heading: event.target.value } }))} className="w-full rounded border border-white/10 bg-black/25 p-3 text-xs" /></label>
+                  <label className="md:col-span-2"><span className="mb-1.5 block text-[9px] font-bold uppercase text-white/40">Main text</span><textarea rows={3} value={pricing.commercial.body} onChange={(event) => setPricing((current) => ({ ...current, commercial: { ...current.commercial, body: event.target.value } }))} className="w-full rounded border border-white/10 bg-black/25 p-3 text-xs leading-5" /></label>
+                  <label className="md:col-span-2"><span className="mb-1.5 block text-[9px] font-bold uppercase text-white/40">Secondary text</span><textarea rows={3} value={pricing.commercial.secondaryBody} onChange={(event) => setPricing((current) => ({ ...current, commercial: { ...current.commercial, secondaryBody: event.target.value } }))} className="w-full rounded border border-white/10 bg-black/25 p-3 text-xs leading-5" /></label>
+                  <label><span className="mb-1.5 block text-[9px] font-bold uppercase text-white/40">Quote button label</span><input value={pricing.commercial.buttonLabel} onChange={(event) => setPricing((current) => ({ ...current, commercial: { ...current.commercial, buttonLabel: event.target.value } }))} className="w-full rounded border border-white/10 bg-black/25 p-3 text-xs" /></label>
+                  <label><span className="mb-1.5 block text-[9px] font-bold uppercase text-white/40">Factors heading</span><input value={pricing.commercial.factorsHeading} onChange={(event) => setPricing((current) => ({ ...current, commercial: { ...current.commercial, factorsHeading: event.target.value } }))} className="w-full rounded border border-white/10 bg-black/25 p-3 text-xs" /></label>
+                  <label className="md:col-span-2"><span className="mb-1.5 block text-[9px] font-bold uppercase text-white/40">Pricing factors — one per line</span><textarea rows={8} value={pricing.commercial.factors.join('\n')} onChange={(event) => setPricing((current) => ({ ...current, commercial: { ...current.commercial, factors: event.target.value.split('\n') } }))} className="w-full rounded border border-white/10 bg-black/25 p-3 text-xs leading-6" /></label>
+                </div>
+              </section>
+
+              <section className="rounded-lg border border-white/10 bg-[#283133]/20 p-5 md:p-6">
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><p className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#A27B5D]">Questions</p><h2 className="mt-1 font-display text-2xl font-semibold">Pricing FAQ</h2></div><div className="flex items-center gap-4"><label className="flex items-center gap-2 text-xs text-white/60"><input type="checkbox" checked={pricing.faq.visible !== false} onChange={(event) => setPricing((current) => ({ ...current, faq: { ...current.faq, visible: event.target.checked } }))} className="accent-[#A27B5D]" />Show FAQ</label><button onClick={() => setPricing((current) => ({ ...current, faq: { ...current.faq, items: [...current.faq.items, { id: crypto.randomUUID(), question: 'New pricing question', answer: '' }] } }))} className="flex items-center gap-2 rounded border border-[#A27B5D]/40 px-3 py-2 text-xs text-[#A27B5D]"><Plus size={13} />Add question</button></div></div>
+                <label className="mb-5 block"><span className="mb-1.5 block text-[9px] font-bold uppercase text-white/40">Section heading</span><input value={pricing.faq.heading} onChange={(event) => setPricing((current) => ({ ...current, faq: { ...current.faq, heading: event.target.value } }))} className="w-full rounded border border-white/10 bg-black/25 p-3 text-xs" /></label>
+                <div className="space-y-3">
+                  {pricing.faq.items.map((faq, index) => <article key={faq.id} className="grid gap-3 rounded border border-white/10 bg-black/15 p-4 md:grid-cols-[1fr_auto]"><div className="space-y-3"><input value={faq.question} onChange={(event) => setPricing((current) => ({ ...current, faq: { ...current.faq, items: current.faq.items.map((item, itemIndex) => itemIndex === index ? { ...item, question: event.target.value } : item) } }))} placeholder="Question" className="w-full rounded border border-white/10 bg-black/25 p-3 text-xs font-semibold" /><textarea rows={3} value={faq.answer} onChange={(event) => setPricing((current) => ({ ...current, faq: { ...current.faq, items: current.faq.items.map((item, itemIndex) => itemIndex === index ? { ...item, answer: event.target.value } : item) } }))} placeholder="Answer" className="w-full rounded border border-white/10 bg-black/25 p-3 text-xs leading-5" /></div><button onClick={() => setPricing((current) => ({ ...current, faq: { ...current.faq, items: current.faq.items.filter((_, itemIndex) => itemIndex !== index) } }))} className="self-start rounded border border-red-400/15 p-2 text-red-300/60"><Trash2 size={14} /></button></article>)}
+                </div>
+              </section>
+
+              <button onClick={() => void saveStructuredContent('pricing.data', pricing, 'Pricing', 'Pricing')} disabled={loading} className="flex items-center gap-2 rounded bg-[#A27B5D] px-6 py-3 text-sm font-bold text-[#090B0B] hover:bg-[#AA876C] disabled:opacity-60"><Save size={16} />Save all pricing</button>
             </div>
           )}
 
